@@ -75,7 +75,10 @@
 
 try:
   import weechat as w
-  import os.path
+
+  import errno
+  import os
+  import time
 
 except Exception:
   print "This script must be run under WeeChat."
@@ -93,6 +96,7 @@ TIMER           = None
 settings = {
   'filepath':   './.available',
   'awaymessage':'Away',
+  'expiry':     '0',
   'interval':   '20', # How often to check for inactivity (in seconds)
   'status':     '0',
   'away':       '0',
@@ -142,6 +146,7 @@ def fileaway_cb(data, buffer, args):
                 'check'   : check,
                 'file'    : lambda filepath: w.config_set_plugin('filepath', filepath),
                 'interval': lambda interval: w.config_set_plugin('interval', interval),
+                'expiry'  : lambda expiry: w.config_set_plugin('expiry', expiry),
                 'msg'     : lambda status: w.config_set_plugin('awaymessage', status),
             }
   if args:
@@ -150,8 +155,8 @@ def fileaway_cb(data, buffer, args):
       response[words[0]](words[2])
     else:
       w.prnt('', "Fileaway error: %s not a recognized command.  Try /help fileaway" % words[0])
-  w.prnt('', "fileaway: enabled: %s interval: %s away message: \"%s\" filepath: %s" % 
-    (w.config_get_plugin('status'), w.config_get_plugin('interval'), 
+  w.prnt('', "fileaway: enabled: %s interval: %s expiry: %s away message: \"%s\" filepath: %s" %
+    (w.config_get_plugin('status'), w.config_get_plugin('interval'), w.config_get_plugin('expiry'),
     w.config_get_plugin('awaymessage'), w.config_get_plugin('filepath')))
   return w.WEECHAT_RC_OK
 
@@ -162,7 +167,19 @@ def auto_check(data, remaining_calls):
 
 def check(args):
   '''Check for existance of file and set away if it isn't there'''
-  if os.path.isfile(w.config_get_plugin('filepath')):
+  available = True
+  try:
+    st = os.stat(w.config_get_plugin('filepath'))
+    ctim = st.st_ctime
+  except OSError as ex:
+    if ex.errno == errno.ENOENT:
+      available = False
+    else:
+      raise
+  expiry = int(w.config_get_plugin('expiry'))
+  if available and expiry > 0:
+     available = time.time() < ctim + expiry
+  if available:
     set_back([w.config_get_plugin('awaymessage')])
   else:
     set_away(w.config_get_plugin('awaymessage'), [])
@@ -187,12 +204,14 @@ if __name__ == "__main__":
     "check, msg [status], interval [time], file [filepath], or enable|disable",
     "check - manually checks for file rather than waiting for interval.\n"
     "msg [status] - sets the away message.\n"
+    "expiry [time] - sets the time since last modification of file to accept.\n"
     "interval [time] - sets the interval to check for the file.\n"
     "file [filepath] - sets the file to be watched.\n"
     "enable|disable - enables or disables plugin.\n",
     "check"
     " || msg"
     " || interval"
+    " || expiry"
     " || file %(filename)"
     " || enable"
     " || disable",
