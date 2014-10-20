@@ -93,18 +93,20 @@ SCRIPT_DESC     = "Set away status based on presence of a file"
 debug           = 0
 TIMER           = None
 
+away = None
+
 settings = {
   'filepath':   './.available',
   'awaymessage':'Away',
   'expiry':     '0',
   'interval':   '20', # How often to check for inactivity (in seconds)
   'status':     '0',
-  'away':       '0',
 }
 
 def set_back(overridable_messages):
   '''Removes away status for servers where one of the overridable_messages is set'''
-  if(w.config_get_plugin('away') == '0'): return # No need to come back again
+  global away
+  if(away == False): return # No need to come back again
   serverlist = w.infolist_get('irc_server','','')
   if serverlist:
     buffers = []
@@ -116,11 +118,12 @@ def set_back(overridable_messages):
     w.infolist_free(serverlist)
     for buffer in buffers:
       w.command(buffer, "/away")
-  w.config_set_plugin('away', '0')
+  away = False
 
 def set_away(message, overridable_messages=[]):
   '''Sets away status, but respectfully (so it doesn't change already set statuses'''
-  if(w.config_get_plugin('away') == '1'): return # No need to go away again (this prevents some repeated messages)
+  global away
+  if(away == True): return # No need to go away again (this prevents some repeated messages)
   if(debug): w.prnt('', "Setting away to %s" % message)
   serverlist = w.infolist_get('irc_server','','')
   if serverlist:
@@ -138,7 +141,7 @@ def set_away(message, overridable_messages=[]):
     if(debug): w.prnt('', repr(buffers))
     for buffer in buffers:
       w.command(buffer, "/away %s" % message)
-  w.config_set_plugin('away', '1')
+  away = True
 
 def fileaway_cb(data, buffer, args):
   response = {  'enable'  : lambda args: w.config_set_plugin('status', '1') and check_timer(),
