@@ -78,6 +78,7 @@ try:
 
   import errno
   import os
+  import re
   import time
 
 except Exception:
@@ -92,6 +93,13 @@ SCRIPT_LICENSE  = "GPL3"
 SCRIPT_DESC     = "Set away status based on presence of a file"
 debug           = 0
 TIMER           = None
+infolist_accessors = {
+  'i': 'infolist_integer',
+  's': 'infolist_string',
+  't': 'infolist_time',
+  #'b': 'infolist_buffer',
+  'p': 'infolist_pointer'
+}
 
 away = None
 
@@ -168,12 +176,42 @@ def auto_check(data, remaining_calls):
   check(0)
   return w.WEECHAT_RC_OK
 
+def relays():
+  relays = []
+  relaylist = w.infolist_get('relay','','')
+  if relaylist:
+    try:
+      i = 0
+      while w.infolist_next(relaylist):
+        relays.append(w.infolist_string(relaylist, 'desc'))
+        if debug:
+          wfs = w.infolist_fields(relaylist)
+          wf = [ tuple(x.split(":")) for x in wfs.split(",") ]
+          for t, f in wf:
+            v = getattr(w, infolist_accessors[t])(relaylist, f)
+            w.prnt('', 'relay %d: %s(%s) %s' % (i, f, t, v))
+        i += 1
+    finally:
+      w.infolist_free(relaylist)
+  return relays
+
 def check(args):
   '''Check for existance of file and set away if it isn't there'''
   available = True
+  drx = None
   try:
-    st = os.stat(w.config_get_plugin('filepath'))
+    filepath = w.config_get_plugin('filepath')
+    st = os.stat(filepath)
     ctim = st.st_ctime
+    with open(filepath) as f:
+      content = f.read().strip()
+      if content:
+        # the content of the file is interpreted
+        # as a regex that specifies those relay
+        # clients whose presence is represented
+        # by the file (referred to in sequel
+        # as "managed relays")
+        drx = re.compile(content)
   except OSError as ex:
     if ex.errno == errno.ENOENT:
       available = False
@@ -182,6 +220,19 @@ def check(args):
   expiry = int(w.config_get_plugin('expiry'))
   if available and expiry > 0:
      available = time.time() < ctim + expiry
+  if drx is not None:
+    relaystats = {'managed':0, 'freerunning':0}
+    for r in relays():
+      if drx.search(r):
+        key = 'managed'
+      else:
+        key = 'freerunning'
+      relaystats[key] += 1
+    # - we evaluate presence in terms of relay clients, ie. if there is none, we decree away
+    # - connection from a freerunning (non-managed) relay always means presence
+    # - if only managed relays are connected, we judge by the age of the control file, ie.
+    #   we decree presence if it was updated within expiry
+    available = relaystats['freerunning'] or (available and relaystats['managed'])
   if available:
     set_back([w.config_get_plugin('awaymessage')])
   else:
