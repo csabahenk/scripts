@@ -201,6 +201,8 @@ def check(args):
   drx = None
   try:
     filepath = w.config_get_plugin('filepath')
+    if debug:
+      w.prnt('', "%s %s" % (os.getcwd(), filepath))
     st = os.stat(filepath)
     ctim = st.st_ctime
     with open(filepath) as f:
@@ -217,6 +219,8 @@ def check(args):
       available = False
     else:
       raise
+  if debug:
+    w.prnt('', drx.pattern)
   expiry = int(w.config_get_plugin('expiry'))
   if available and expiry > 0:
      available = time.time() < ctim + expiry
@@ -233,6 +237,8 @@ def check(args):
     # - if only managed relays are connected, we judge by the age of the control file, ie.
     #   we decree presence if it was updated within expiry
     available = relaystats['freerunning'] or (available and relaystats['managed'])
+  if debug:
+    w.prnt('', 'rstat %s time %f ctim %d + expiry %d = %d available %s' % (`relaystats`, time.time(), ctim, expiry, ctim + expiry, `available`))
   if available:
     set_back([w.config_get_plugin('awaymessage')])
   else:
