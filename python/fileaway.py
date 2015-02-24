@@ -186,7 +186,7 @@ if __name__ == "__main__":
     "Set away status based on presense or absense of a file.",
     "check, msg [status], interval [time], file [filepath], or enable|disable",
     "check - manually checks for file rather than waiting for interval.\n"
-    "msg [status] - sets the away message"
+    "msg [status] - sets the away message.\n"
     "interval [time] - sets the interval to check for the file.\n"
     "file [filepath] - sets the file to be watched.\n"
     "enable|disable - enables or disables plugin.\n",
