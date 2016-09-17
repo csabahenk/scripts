@@ -65,6 +65,65 @@
 #    esac
 # done
 # ------------------------------------------------------------------------
+# Expiry and relay monitoring.
+#
+# If the 'expiry' option ('plugins.var.python.fileaway.expiry') is set to a
+# positive value, the availability file will be considered non-existent if it's
+# older than (last modificationthan was before) expiry (in seconds). This is
+# useful to make sure that no stale availabilityindication is left over. (Such
+# cases: a) machine is rebooted and the script that manages creation/deletion
+# of the availability file is not restarted; b) the availability file is
+# managed from a remote machine which loses connection to the machine that runs
+# Weechat.)
+#
+# So for example the xset based snippet coud be modified to work with expiry
+# like
+#
+# #!/bin/sh
+#
+# while sleep 1; do
+#    xset -display ":0" q | grep -q "Monitor is On" && touch ~/.available
+# done
+#
+# (we don't have to handle the case when the monitor is off, as the availability
+# file just expires if that condition persists).
+#
+#   * * *
+#
+# Also we now interpret the content of the availability file.
+#
+# If it's empty (or consists purely of whitespace) we retain existing behavior.
+# (Also if it's non-existent.)
+#
+# However, if it has some text in it, that text is interpreted as a regex,
+# and it triggers a relay connection checking mechanism.
+#
+# Relay connections are grouped into two:
+# - managed relays: ones whose addresses matches the regex;
+# - freerunning relays: ones whose addresses does not match.
+#
+# Any freerunning relay implies availability. (Special case: if the
+# availability file is a never matching regex like ".^", then availability
+# will be equivalent to having a connected relay.)
+#
+# With managed relays we assume that there is an agent/script that updates
+# the availability file on their behalf, so we use the expiry mechanism for
+# them. So if only managed relays are connected, but the availability file
+# is older than exprity, we set IRC presence to away.
+#
+# Thus on the relay client end we can use a script like:
+#
+# #!/bin/sh
+#
+# MYIP=<client ip>
+# WEECHATIP=<ip of the machine running Weechat>
+#
+# while sleep 1; do
+#    xset -display ":0" q | grep -q "Monitor is On" && \
+#     ssh $WEECHATIP "echo $MYIP > ~/.available"
+# done
+#
+# ------------------------------------------------------------------------
 # Changelog:
 # Version 1.0 released - March 27, 2011
 #  -Initial release
@@ -72,6 +131,8 @@
 #  -Handles improper commands
 # Version 1.0.2 release - Jun 15, 2011
 #  -Added alternative for xset users (credit: sherpa9 at irc.freenode.net)
+# Version 1.0.3 - Sep 17, 2016
+#  - Expiry and relay monitoring (Csaba Henk <csaba@lowlife.hu>)
 
 try:
   import weechat as w
@@ -88,7 +149,7 @@ except Exception:
 
 SCRIPT_NAME     = "fileaway"
 SCRIPT_AUTHOR   = "javagamer"
-SCRIPT_VERSION  = "1.0.2"
+SCRIPT_VERSION  = "1.0.3"
 SCRIPT_LICENSE  = "GPL3"
 SCRIPT_DESC     = "Set away status based on presence of a file"
 debug           = 0
